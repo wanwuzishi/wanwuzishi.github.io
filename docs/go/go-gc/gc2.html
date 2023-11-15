@@ -1,0 +1,521 @@
+<!DOCTYPE HTML>
+<html lang="zh" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Golang三色标记、混合写屏障GC模式图文全分析 - 前行不止</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="写点文档，感想什么的！">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../../favicon.svg">
+        <link rel="shortcut icon" href="../../favicon.png">
+        <link rel="stylesheet" href="../../css/variables.css">
+        <link rel="stylesheet" href="../../css/general.css">
+        <link rel="stylesheet" href="../../css/chrome.css">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../../highlight.css">
+        <link rel="stylesheet" href="../../tomorrow-night.css">
+        <link rel="stylesheet" href="../../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="../../index.html">说明</a></li><li class="spacer"></li><li class="chapter-item expanded affix "><li class="part-title">中文</li><li class="chapter-item expanded "><a href="../../go/index.html"><strong aria-hidden="true">1.</strong> go</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../go/go-gc/index.html"><strong aria-hidden="true">1.1.</strong> go-gc</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../go/go-gc/gc1.html"><strong aria-hidden="true">1.1.1.</strong> 一文弄懂 Golang GC、三色标记、混合写屏障机制</a></li><li class="chapter-item expanded "><a href="../../go/go-gc/gc2.html" class="active"><strong aria-hidden="true">1.1.2.</strong> Golang三色标记、混合写屏障GC模式图文全分析</a></li></ol></li></ol></li><li class="chapter-item expanded "><a href="../../task/index.html"><strong aria-hidden="true">2.</strong> 任务管理</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">前行不止</h1>
+
+                    <div class="right-buttons">
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="golang三色标记混合写屏障gc模式图文全分析"><a class="header" href="#golang三色标记混合写屏障gc模式图文全分析">Golang三色标记、混合写屏障GC模式图文全分析</a></h1>
+<p><a href="https://segmentfault.com/a/1190000022030353">典藏版-Golang三色标记、混合写屏障GC模式图文全分析</a></p>
+<blockquote>
+<p><strong>原创声明</strong>:未经作者允许请勿转载, 如果转载请注明出处<br />
+作者:<strong>刘丹冰Aceld</strong>, 微信公众号同名</p>
+</blockquote>
+<p>垃圾回收(Garbage Collection，简称GC)是编程语言中提供的自动的内存管理机制，自动释放不需要的对象，让出存储器资源，无需程序员手动执行。</p>
+<p>Golang中的垃圾回收主要应用三色标记法，GC过程和其他用户goroutine可并发运行，但需要一定时间的<strong>STW(stop the world)</strong>，STW的过程中，CPU不执行用户代码，全部用于垃圾回收，这个过程的影响很大，Golang进行了多次的迭代优化来解决这个问题。</p>
+<h4 id="〇内容提纲"><a class="header" href="#〇内容提纲">〇、内容提纲</a></h4>
+<p>本文将系统的详细介绍Golang中GC的全分析过程，包括垃圾回收的方式递进。<br />
+内容包括：</p>
+<ul>
+<li>G0 V1.3之前的标记-清除(mark and sweep)算法</li>
+<li>Go V1.3之前的标记-清扫(mark and sweep)的缺点</li>
+<li>Go V1.5的三色并发标记法</li>
+<li>Go V1.5的三色标记为什么需要STW</li>
+<li>Go V1.5的三色标记为什么需要屏障机制(“强-弱” 三色不变式、插入屏障、删除屏障 )</li>
+<li>Go V1.8混合写屏障机制</li>
+<li>Go V1.8混合写屏障机制的全场景分析</li>
+</ul>
+<blockquote>
+<p>文章约近50张图文解析、4000+文字、推荐分阶段学习及消化</p>
+</blockquote>
+<h4 id="一go-v13之前的标记-清除mark-and-sweep算法"><a class="header" href="#一go-v13之前的标记-清除mark-and-sweep算法">一、Go V1.3之前的标记-清除(mark and sweep)算法</a></h4>
+<p>此算法主要有两个主要的步骤：</p>
+<ul>
+<li>标记(Mark phase)</li>
+<li>清除(Sweep phase)</li>
+</ul>
+<p><strong>第一步</strong>，暂停程序业务逻辑, 找出不可达的对象，然后做上标记。第二步，回收标记好的对象。</p>
+<p>操作非常简单，但是有一点需要额外注意：mark and sweep算法在执行的时候，需要程序暂停！即 <code>STW(stop the world)</code>。也就是说，这段时间程序会卡在哪儿。</p>
+<p><img src="img-gc2/1460000022030357.png" alt="" /></p>
+<p><strong>第二步</strong>, 开始标记，程序找出它所有可达的对象，并做上标记。如下图所示：<br />
+<img src="img-gc2/1460000022030356.png" alt="" /></p>
+<p><strong>第三步</strong>, 标记完了之后，然后开始清除未标记的对象. 结果如下.<br />
+<img src="img-gc2/1460000022030362.png" alt="" /><br />
+<strong>第四步</strong>, 停止暂停，让程序继续跑。然后循环重复这个过程，直到process程序生命周期结束。</p>
+<h4 id="二标记-清扫mark-and-sweep的缺点"><a class="header" href="#二标记-清扫mark-and-sweep的缺点">二、标记-清扫(mark and sweep)的缺点</a></h4>
+<ul>
+<li>STW，stop the world；让程序暂停，程序出现卡顿 <strong>(重要问题)</strong>。</li>
+<li>标记需要扫描整个heap</li>
+<li>清除数据会产生heap碎片</li>
+</ul>
+<p>所以Go V1.3版本之前就是以上来实施的, 流程是<br />
+<img src="img-gc2/1460000022030358.png" alt="" /></p>
+<p>Go V1.3 做了简单的优化,将STW提前, 减少STW暂停的时间范围.如下所示</p>
+<p><img src="img-gc2/1460000022030368.png" alt="" /></p>
+<p><strong>这里面最重要的问题就是：mark-and-sweep 算法会暂停整个程序</strong> 。</p>
+<p>Go是如何面对并这个问题的呢？接下来G V1.5版本 就用<strong>三色并发标记法</strong>来优化这个问题.</p>
+<h4 id="三go-v15的三色并发标记法"><a class="header" href="#三go-v15的三色并发标记法">三、Go V1.5的三色并发标记法</a></h4>
+<p>三色标记法 实际上就是通过三个阶段的标记来确定清楚的对象都有哪些. 我们来看一下具体的过程.</p>
+<p><strong>第一步</strong> , 就是只要是新创建的对象,默认的颜色都是标记为“白色”.<br />
+<img src="img-gc2/1460000022030360.png" alt="" /></p>
+<p>这里面需要注意的是, 所谓“程序”, 则是一些对象的跟节点集合.</p>
+<p><img src="img-gc2/1460000022030359.jpeg" alt="" /></p>
+<p>所以上图,可以转换如下的方式来表示.</p>
+<p><strong>第二步</strong>, 每次GC回收开始, 然后从根节点开始遍历所有对象，把遍历到的对象从白色集合放入“灰色”集合。</p>
+<p><img src="img-gc2/1460000022030369.jpeg" alt="" /></p>
+<p><strong>第三步</strong>, 遍历灰色集合，将灰色对象引用的对象从白色集合放入灰色集合，之后将此灰色对象放入黑色集合<br />
+<img src="img-gc2/1460000022030367.jpeg" alt="" /></p>
+<p><strong>第四步</strong>, 重复<strong>第三步</strong>, 直到灰色中无任何对象.<br />
+<img src="img-gc2/1460000022030361.jpeg" alt="" /><br />
+<img src="img-gc2/1460000022030366.jpeg" alt="" /></p>
+<p><strong>第五步</strong>: 回收所有的白色标记表的对象. 也就是回收垃圾.</p>
+<p><img src="img-gc2/1460000022030371.jpeg" alt="" /></p>
+<p>以上便是<code>三色并发标记法</code>, 不难看出,我们上面已经清楚的体现<code>三色</code>的特性, 那么又是如何实现并行的呢?</p>
+<blockquote>
+<p>Go是如何解决标记-清除(mark and sweep)算法中的卡顿(stw，stop the world)问题的呢？</p>
+</blockquote>
+<h4 id="四没有stw的三色标记法"><a class="header" href="#四没有stw的三色标记法">四、没有STW的三色标记法</a></h4>
+<p>我们还是基于上述的三色并发标记法来说, 他是一定要依赖STW的. 因为如果不暂停程序, 程序的逻辑改变对象引用关系, 这种动作如果在标记阶段做了修改，会影响标记结果的正确性。我们举一个场景.</p>
+<p>如果三色标记法, 标记过程不使用STW将会发生什么事情?</p>
+<hr />
+<p><img src="img-gc2/1460000022030370.jpeg" alt="" /></p>
+<hr />
+<p><img src="img-gc2/1460000022030363.jpeg" alt="" /></p>
+<hr />
+<p><img src="img-gc2/1460000022030364.jpeg" alt="" /></p>
+<hr />
+<p><img src="img-gc2/1460000022030365.jpeg" alt="" /></p>
+<hr />
+<p><img src="img-gc2/1460000022030380.jpeg" alt="" /></p>
+<hr />
+<p>可以看出，有两个问题, 在三色标记法中,是不希望被发生的</p>
+<ul>
+<li>条件1: 一个白色对象被黑色对象引用**(白色被挂在黑色下)**</li>
+<li>条件2: 灰色对象与它之间的可达关系的白色对象遭到破坏**(灰色同时丢了该白色)**</li>
+</ul>
+<p>当以上两个条件同时满足时, 就会出现对象丢失现象!</p>
+<p>当然, 如果上述中的白色对象3, 如果他还有很多下游对象的话, 也会一并都清理掉.</p>
+<p>为了防止这种现象的发生，最简单的方式就是STW，直接禁止掉其他用户程序对对象引用关系的干扰，但是<strong>STW的过程有明显的资源浪费，对所有的用户程序都有很大影响</strong>，如何能在保证对象不丢失的情况下合理的尽可能的提高GC效率，减少STW时间呢？</p>
+<p>答案就是, 那么我们只要使用一个机制,来破坏上面的两个条件就可以了.</p>
+<h4 id="五屏障机制"><a class="header" href="#五屏障机制">五、屏障机制</a></h4>
+<p>我们让GC回收器,满足下面两种情况之一时,可保对象不丢失. 所以引出两种方式.</p>
+<h5 id="1-强-弱-三色不变式"><a class="header" href="#1-强-弱-三色不变式">(1) “强-弱” 三色不变式</a></h5>
+<ul>
+<li>强三色不变式</li>
+</ul>
+<p>不存在黑色对象引用到白色对象的指针。</p>
+<p><img src="img-gc2/1460000022030372.jpeg" alt="" /></p>
+<ul>
+<li>弱三色不变式</li>
+</ul>
+<p>所有被黑色对象引用的白色对象都处于灰色保护状态.</p>
+<p><img src="img-gc2/1460000022030375.jpeg" alt="" /></p>
+<p>为了遵循上述的两个方式,Golang团队初步得到了如下具体的两种屏障方式“插入屏障”, “删除屏障”.</p>
+<h5 id="2-插入屏障"><a class="header" href="#2-插入屏障">(2) 插入屏障</a></h5>
+<p><code>具体操作</code>: 在A对象引用B对象的时候，B对象被标记为灰色。(将B挂在A下游，B必须被标记为灰色)</p>
+<p><code>满足</code>: <strong>强三色不变式</strong>. (不存在黑色对象引用白色对象的情况了， 因为白色会强制变成灰色)</p>
+<p>伪码如下:</p>
+<pre><code>添加下游对象(当前下游对象slot, 新下游对象ptr) {   
+  
+  标记灰色(新下游对象ptr)   
+  
+  
+  当前下游对象slot = 新下游对象ptr                    
+}
+</code></pre>
+<p>场景：</p>
+<pre><code>A.添加下游对象(nil, B)   
+A.添加下游对象(C, B)     
+</code></pre>
+<p>这段伪码逻辑就是写屏障,. 我们知道,黑色对象的内存槽有两种位置, <code>栈</code>和<code>堆</code>. 栈空间的特点是容量小,但是要求相应速度快,因为函数调用弹出频繁使用, 所以“插入屏障”机制,在<strong>栈空间的对象操作中不使用</strong>. 而仅仅使用在堆空间对象的操作中.</p>
+<p>接下来，我们用几张图，来模拟整个一个详细的过程， 希望您能够更可观的看清晰整体流程。</p>
+<hr />
+<p><img src="img-gc2/1460000022030373.jpeg" alt="" /></p>
+<hr />
+<p><img src="img-gc2/1460000022030374.jpeg" alt="" /></p>
+<hr />
+<p><img src="img-gc2/1460000022030376.jpeg" alt="" /></p>
+<hr />
+<p><img src="img-gc2/1460000022030377.jpeg" alt="" /></p>
+<hr />
+<p><img src="img-gc2/1460000022030389.jpeg" alt="" /></p>
+<hr />
+<p><img src="img-gc2/1460000022030378.jpeg" alt="" /></p>
+<hr />
+<p>但是如果栈不添加,当全部三色标记扫描之后,栈上有可能依然存在白色对象被引用的情况(如上图的对象9). 所以要对栈重新进行三色标记扫描, 但这次为了对象不丢失, 要对本次标记扫描启动STW暂停. 直到栈空间的三色标记结束.</p>
+<hr />
+<p><img src="img-gc2/1460000022030379.jpeg" alt="" /></p>
+<hr />
+<p><img src="img-gc2/1460000022030381.jpeg" alt="" /></p>
+<hr />
+<p><img src="img-gc2/1460000022030382.jpeg" alt="" /></p>
+<hr />
+<p>最后将栈和堆空间 扫描剩余的全部 白色节点清除. 这次STW大约的时间在10~100ms间.</p>
+<hr />
+<p><img src="img-gc2/1460000022030383.jpeg" alt="" /></p>
+<hr />
+<h5 id="3-删除屏障"><a class="header" href="#3-删除屏障">(3) 删除屏障</a></h5>
+<p><code>具体操作</code>: 被删除的对象，如果自身为灰色或者白色，那么被标记为灰色。</p>
+<p><code>满足</code>: <strong>弱三色不变式</strong>. (保护灰色对象到白色对象的路径不会断)</p>
+<p>伪代码：</p>
+<pre><code>添加下游对象(当前下游对象slot， 新下游对象ptr) {
+  
+  if (当前下游对象slot是灰色 || 当前下游对象slot是白色) {
+          标记灰色(当前下游对象slot)     
+  }
+  
+  
+  当前下游对象slot = 新下游对象ptr
+}
+</code></pre>
+<p>场景：</p>
+<pre><code>A.添加下游对象(B, nil)   
+A.添加下游对象(B, C)         
+</code></pre>
+<p>接下来，我们用几张图，来模拟整个一个详细的过程， 希望您能够更可观的看清晰整体流程。</p>
+<hr />
+<p><img src="img-gc2/1460000022030385.jpeg" alt="" /></p>
+<hr />
+<p><img src="img-gc2/1460000022030386.jpeg" alt="" /></p>
+<hr />
+<p><img src="img-gc2/1460000022030384.jpeg" alt="" /></p>
+<hr />
+<p><img src="img-gc2/1460000022030387.jpeg" alt="" /></p>
+<hr />
+<p><img src="img-gc2/1460000022030388.jpeg" alt="" /></p>
+<hr />
+<p><img src="img-gc2/1460000022030398.jpeg" alt="" /></p>
+<hr />
+<p><img src="img-gc2/1460000022030390.jpeg" alt="" /></p>
+<hr />
+<p>这种方式的回收精度低，一个对象即使被删除了最后一个指向它的指针也依旧可以活过这一轮，在下一轮GC中被清理掉。</p>
+<h4 id="六go-v18的混合写屏障hybrid-write-barrier机制"><a class="header" href="#六go-v18的混合写屏障hybrid-write-barrier机制">六、Go V1.8的混合写屏障(hybrid write barrier)机制</a></h4>
+<p>插入写屏障和删除写屏障的短板：</p>
+<ul>
+<li>插入写屏障：结束时需要STW来重新扫描栈，标记栈上引用的白色对象的存活；</li>
+<li>删除写屏障：回收精度低，GC开始时STW扫描堆栈来记录初始快照，这个过程会保护开始时刻的所有存活对象。</li>
+</ul>
+<p>Go V1.8版本引入了混合写屏障机制（hybrid write barrier），避免了对栈re-scan的过程，极大的减少了STW的时间。结合了两者的优点。</p>
+<hr />
+<h5 id="1-混合写屏障规则"><a class="header" href="#1-混合写屏障规则">(1) 混合写屏障规则</a></h5>
+<p><code>具体操作</code>:</p>
+<p>1、GC开始将栈上的对象全部扫描并标记为黑色(之后不再进行第二次重复扫描，无需STW)，</p>
+<p>2、GC期间，任何在栈上创建的新对象，均为黑色。</p>
+<p>3、被删除的对象标记为灰色。</p>
+<p>4、被添加的对象标记为灰色。</p>
+<p><code>满足</code>: 变形的<strong>弱三色不变式</strong>.</p>
+<p>伪代码：</p>
+<pre><code>添加下游对象(当前下游对象slot, 新下游对象ptr) {
+      
+        标记灰色(当前下游对象slot)    
+      
+      
+      标记灰色(新下游对象ptr)
+          
+      
+      当前下游对象slot = 新下游对象ptr
+}
+</code></pre>
+<blockquote>
+<p>这里我们注意， 屏障技术是不在栈上应用的，因为要保证栈的运行效率。</p>
+</blockquote>
+<h5 id="2-混合写屏障的具体场景分析"><a class="header" href="#2-混合写屏障的具体场景分析">(2) 混合写屏障的具体场景分析</a></h5>
+<p>接下来，我们用几张图，来模拟整个一个详细的过程， 希望您能够更可观的看清晰整体流程。</p>
+<blockquote>
+<p>注意混合写屏障是Gc的一种屏障机制，所以只是当程序执行GC的时候，才会触发这种机制。</p>
+</blockquote>
+<h6 id="gc开始扫描栈区将可达对象全部标记为黑"><a class="header" href="#gc开始扫描栈区将可达对象全部标记为黑">GC开始：扫描栈区，将可达对象全部标记为黑</a></h6>
+<p><img src="img-gc2/1460000022030391.jpeg" alt="" /></p>
+<hr />
+<p><img src="img-gc2/1460000022030392.jpeg" alt="" /></p>
+<hr />
+<hr />
+<h6 id="场景一-对象被一个堆对象删除引用成为栈对象的下游"><a class="header" href="#场景一-对象被一个堆对象删除引用成为栈对象的下游">场景一： 对象被一个堆对象删除引用，成为栈对象的下游</a></h6>
+<blockquote>
+<p>伪代码</p>
+</blockquote>
+<pre><code>栈对象1-&gt;对象7 = 堆对象7；  
+堆对象4-&gt;对象7 = null；    
+</code></pre>
+<p><img src="img-gc2/1460000022030393.jpeg" alt="" /></p>
+<hr />
+<p><img src="img-gc2/1460000022030394.jpeg" alt="" /></p>
+<hr />
+<h6 id="场景二-对象被一个栈对象删除引用成为另一个栈对象的下游"><a class="header" href="#场景二-对象被一个栈对象删除引用成为另一个栈对象的下游">场景二： 对象被一个栈对象删除引用，成为另一个栈对象的下游</a></h6>
+<blockquote>
+<p>伪代码</p>
+</blockquote>
+<pre><code>new 栈对象9；
+对象8-&gt;对象3 = 对象3；      
+对象2-&gt;对象3 = null；      
+</code></pre>
+<hr />
+<p><img src="img-gc2/1460000022030395.jpeg" alt="" /></p>
+<hr />
+<p><img src="img-gc2/1460000022030396.jpeg" alt="" /></p>
+<hr />
+<p><img src="img-gc2/1460000022030397.jpeg" alt="" /></p>
+<hr />
+<hr />
+<h6 id="场景三对象被一个堆对象删除引用成为另一个堆对象的下游"><a class="header" href="#场景三对象被一个堆对象删除引用成为另一个堆对象的下游">场景三：对象被一个堆对象删除引用，成为另一个堆对象的下游</a></h6>
+<blockquote>
+<p>伪代码</p>
+</blockquote>
+<pre><code>堆对象10-&gt;对象7 = 堆对象7；       
+堆对象4-&gt;对象7 = null；         
+</code></pre>
+<hr />
+<p><img src="img-gc2/1460000022030404.jpeg" alt="" /></p>
+<hr />
+<p><img src="img-gc2/1460000022030399.jpeg" alt="" /></p>
+<hr />
+<p><img src="img-gc2/1460000022030400.jpeg" alt="" /></p>
+<hr />
+<hr />
+<h6 id="场景四对象从一个栈对象删除引用成为另一个堆对象的下游"><a class="header" href="#场景四对象从一个栈对象删除引用成为另一个堆对象的下游">场景四：对象从一个栈对象删除引用，成为另一个堆对象的下游</a></h6>
+<blockquote>
+<p>伪代码</p>
+</blockquote>
+<pre><code>堆对象10-&gt;对象7 = 堆对象7；       
+堆对象4-&gt;对象7 = null；         
+</code></pre>
+<hr />
+<p><img src="img-gc2/1460000022030401.jpeg" alt="" /></p>
+<hr />
+<p><img src="img-gc2/1460000022030402.jpeg" alt="" /></p>
+<hr />
+<p><img src="img-gc2/1460000022030403.jpeg" alt="" /></p>
+<hr />
+<hr />
+<p>Golang中的混合写屏障满足<code>弱三色不变式</code>，结合了删除写屏障和插入写屏障的优点，只需要在开始时并发扫描各个goroutine的栈，使其变黑并一直保持，这个过程不需要STW，而标记结束后，因为栈在扫描后始终是黑色的，也无需再进行re-scan操作了，减少了STW的时间。</p>
+<h5 id="七总结"><a class="header" href="#七总结">七、总结</a></h5>
+<p>以上便是Golang的GC全部的标记-清除逻辑及场景演示全过程。</p>
+<p>GoV1.3- 普通标记清除法，整体过程需要启动STW，效率极低。</p>
+<p>GoV1.5- 三色标记法， 堆空间启动写屏障，栈空间不启动，全部扫描之后，需要重新扫描一次栈(需要STW)，效率普通</p>
+<p>GoV1.8-三色标记法，混合写屏障机制， 栈空间不启动，堆空间启动。整个过程几乎不需要STW，效率较高。</p>
+<p>参考文献:</p>
+<p><a href="https://link.segmentfault.com/?enc=8gsA3R3eIFoKIr%2B6OUnd%2Fw%3D%3D.qfCKr%2Bcz0qd9EGICmKwrVZYQJ2L4nH4fZMKuFG4bmHQUrNmOZfsKrTtLNQ%2FO2Xw%2Fpo9%2Fcfr%2FP2oFkhGWxQqeRw%3D%3D">https://www.cnblogs.com/wangyiyang/p/12191591.html</a><br />
+<a href="https://link.segmentfault.com/?enc=6%2FZPF8MYMEpuyOK3m1ohPA%3D%3D.DWwt7iB66ygGNK50HV%2F77syhQoTgS6nbU5NmY5v%2BYtOI%2BQEq4j7XG4InqFkniQI7">https://www.jianshu.com/p/eb6b3aff9ca5</a><br />
+<a href="https://link.segmentfault.com/?enc=0%2FogihWY1PINvR2EHgb90g%3D%3D.t%2BUKMSWkhtan5kmHbKy9bxWBGpLpw7rClEK6n5EeP%2FAGPh8MLz9NqBNYTxdgWx4j">https://zhuanlan.zhihu.com/p/74853110</a></p>
+<hr />
+<h3 id="关于作者"><a class="header" href="#关于作者">关于作者：</a></h3>
+<p>mail: <a href="mailto:danbing.at@gmail.com">danbing.at@gmail.com</a><br />
+github: <a href="https://link.segmentfault.com/?enc=gv%2B8or1haLRz1W%2FtOgtu%2FA%3D%3D.CIzQAL0Ht5i8Snn8LyYJoApExadRqiZGBmvbtaFvynQ%3D">https://github.com/aceld</a><br />
+原创书籍gitbook: <a href="https://link.segmentfault.com/?enc=j40sxXxb0X%2BIc8Eo06z%2FBQ%3D%3D.FisQRQ83JTzl8OeG6ZL04XKXiIwzHAih3dxE0H2eIze6Mo6PALe93qaXs9NOSuLn">http://legacy.gitbook.com/@aceld</a></p>
+<h2 id="创作不易-共同学习进步-欢迎关注作者-回复zinx有好礼"><a class="header" href="#创作不易-共同学习进步-欢迎关注作者-回复zinx有好礼">创作不易, 共同学习进步, 欢迎关注作者, 回复&quot;zinx&quot;有好礼</a></h2>
+<p><img src="img-gc2/1460000021955936.jpeg" alt="作者微信公众号" title="作者微信公众号" /></p>
+<hr />
+<h2 id="文章推荐"><a class="header" href="#文章推荐">文章推荐</a></h2>
+<h4 id="开源软件作品"><a class="header" href="#开源软件作品">开源软件作品</a></h4>
+<p><a href="https://link.segmentfault.com/?enc=l%2FJFVLfVug9vmdZR%2F5twMQ%3D%3D.2OiB6pKVi009uQ2i40VkFq9oROZwPGENd4WFR4sg6FKX%2BQLQf05y%2FqZ6Wh7zqQmw">(原创开源)Zinx-基于Golang轻量级服务器并发框架-完整版(附教程视频)</a></p>
+<p><a href="https://link.segmentfault.com/?enc=dJP%2B6BRbCQe5Om8m9scp%2FQ%3D%3D.ePNe4Av02JhyrFY7PT%2BmysEzkCl2zJlC3Kw9lh82fBq3xusTV7xFEQdftpMUH%2BWV">(原创开源)Lars-基于C++负载均衡远程调度系统-完整版</a></p>
+<h4 id="精选文章"><a class="header" href="#精选文章">精选文章</a></h4>
+<p><a href="https://link.segmentfault.com/?enc=yBgkPOl%2BCnNzGS%2BbrACO1g%3D%3D.IghECZW%2BLPRPyBnZq8ikrL6UVSctHM4oPC5ST6ng947%2BQSD8U5GPOYTlwA5l5Stk">典藏版-Golang调度器GMP原理与调度全分析</a></p>
+<p><a href="https://link.segmentfault.com/?enc=EP6HfoLUtc4wqvTjMG8NhQ%3D%3D.tUK%2BlwAO5%2BqYeauSPc%2FF%2B7JjDVXKcfvEoHJWMwrsfRthvWPvl0H%2BCkjd0WRKhkAG">最常用的调试 golang 的 bug 以及性能问题的实践方法？</a></p>
+<p><a href="https://link.segmentfault.com/?enc=1MHM3ocIZzpGc45hgv%2B4JQ%3D%3D.4dwclyaaPErap%2Be1gqUtihFTd0DDeYT31F%2BcgWUFSZ%2BpMw0y3KH91RzeYW5BbJtB">Golang中的局部变量“何时栈?何时堆?”</a></p>
+<p><a href="https://link.segmentfault.com/?enc=%2BiiG34r%2BHChwrc8t9kG%2FlA%3D%3D.B895pKc5%2BNTIhjs3xJ%2FR%2BkRy0QUVJMwWouXUgJADPBFJkhHmq7yTALw47ZM5XCU2">使用Golang的interface接口设计原则</a></p>
+<p><a href="https://link.segmentfault.com/?enc=UWnQZ5ZnHeEf9jnuho5zFg%3D%3D.q9vcssPmhedk6RzrTFWbESX4l74hFfWtM5tcU5Gg4sCJJioU0n8fJD3wsqk3C2Hi">流？I/O操作？阻塞？epoll?</a></p>
+<p><a href="https://link.segmentfault.com/?enc=H2CF1cr9uMVyu2hhaMixUw%3D%3D.7lRuIqu8Soiensuk3E1VDuwR6IkgfO%2F3uTyJbHwASBgHHS6gWv2sinxUw7fG2%2Bdm">深入浅出Golang的协程池设计</a></p>
+<p><a href="https://link.segmentfault.com/?enc=Mk7jRe%2BTfzFqe5NkaAnEsw%3D%3D.UDr95eKwbs2EA4kPNhH0r5%2FZDSNfc79FoBLGlADc5QlDH%2FupYB5b3TBb4rts2OO1">Go语言构建微服务一站式解决方案</a></p>
+<hr />
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../../go/go-gc/gc1.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../../task/index.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../../go/go-gc/gc1.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../../task/index.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../../elasticlunr.min.js"></script>
+        <script src="../../mark.min.js"></script>
+        <script src="../../searcher.js"></script>
+
+        <script src="../../clipboard.min.js"></script>
+        <script src="../../highlight.js"></script>
+        <script src="../../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

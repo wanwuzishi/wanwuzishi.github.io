@@ -1,0 +1,17 @@
+[book]
+title = "前行不止"
+author = "动若脱兔"
+description = "写点文档，感想什么的！"
+authors = []
+language = "zh"
+multilingual = false
+src = "src"
+cname = "niaiwomattt.github.io"
+site-url = "/docs"
+[build]
+build-dir = "docs"
+[output]
+
+[output.html.print]
+enable=false
+# [output.epub]
