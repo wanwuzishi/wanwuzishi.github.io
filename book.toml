@@ -11,7 +11,7 @@ site-url = "/docs"
 no-section-label = true # 目录列标签
 
 [output.html.fold]
-enable = true
+enable = false
 level = 0
 [build]
 build-dir = "docs"
