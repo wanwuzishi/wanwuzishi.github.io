@@ -8,6 +8,11 @@ multilingual = false
 src = "src"
 cname = "niaiwomattt.github.io"
 site-url = "/docs"
+no-section-label = true # 目录列标签
+
+[output.html.fold]
+enable = true
+level = 0
 [build]
 build-dir = "docs"
 [output]
